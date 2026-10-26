@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase, SUPABASE_CONFIGURED } from './lib/supabase';
 import { todayKarachi, prettyDate } from './lib/date';
+import { I, type IconName } from './components/icons';
 import Auth from './pages/Auth';
 import CommandCenter from './pages/CommandCenter';
 import PrayerQaza from './pages/PrayerQaza';
@@ -15,32 +16,32 @@ import Finance from './pages/Finance';
 import Search from './pages/Search';
 import Settings from './pages/Settings';
 
-const GROUPS: { label: string; items: { id: string; label: string; ico: string }[] }[] = [
+const GROUPS: { label: string; items: { id: string; label: string; ico: IconName }[] }[] = [
   { label: 'Overview', items: [
-    { id: 'home', label: 'Command Center', ico: '⌂' },
-    { id: 'search', label: 'Search', ico: '⌕' },
+    { id: 'home', label: 'Command Center', ico: 'home' },
+    { id: 'search', label: 'Search', ico: 'search' },
   ] },
   { label: 'Track', items: [
-    { id: 'prayer', label: 'Prayer + Qaza', ico: '✦' },
-    { id: 'sleep', label: 'Sleep', ico: '☾' },
-    { id: 'reading', label: 'Reading', ico: '▤' },
-    { id: 'workout', label: 'Workout', ico: '▲' },
-    { id: 'focus', label: 'Focus', ico: '◷' },
-    { id: 'habits', label: 'Habits + Food', ico: '✓' },
-    { id: 'private', label: 'Private', ico: '◆' },
+    { id: 'prayer', label: 'Prayer + Qaza', ico: 'moon' },
+    { id: 'sleep', label: 'Sleep', ico: 'bed' },
+    { id: 'reading', label: 'Reading', ico: 'book' },
+    { id: 'workout', label: 'Workout', ico: 'dumbbell' },
+    { id: 'focus', label: 'Focus', ico: 'clock' },
+    { id: 'habits', label: 'Habits + Food', ico: 'check' },
+    { id: 'private', label: 'Private', ico: 'lock' },
   ] },
   { label: 'Manage', items: [
-    { id: 'journal', label: 'Journal + Events', ico: '✎' },
-    { id: 'finance', label: 'Finance', ico: '◈' },
-    { id: 'settings', label: 'Settings + Finish Day', ico: '⚙' },
+    { id: 'journal', label: 'Journal + Events', ico: 'pen' },
+    { id: 'finance', label: 'Finance', ico: 'wallet' },
+    { id: 'settings', label: 'Settings + Finish Day', ico: 'gear' },
   ] },
 ];
 const ALL = GROUPS.flatMap((g) => g.items);
-const BOTTOM = [
-  { id: 'home', label: 'Home', ico: '⌂' },
-  { id: 'prayer', label: 'Prayer', ico: '✦' },
-  { id: 'focus', label: 'Focus', ico: '◷' },
-  { id: 'habits', label: 'Habits', ico: '✓' },
+const BOTTOM: { id: string; label: string; ico: IconName }[] = [
+  { id: 'home', label: 'Home', ico: 'home' },
+  { id: 'prayer', label: 'Prayer', ico: 'moon' },
+  { id: 'focus', label: 'Focus', ico: 'clock' },
+  { id: 'habits', label: 'Habits', ico: 'check' },
 ];
 
 export default function App() {
@@ -108,7 +109,7 @@ export default function App() {
             <div className="side-label">{g.label}</div>
             {g.items.map((t) => (
               <button key={t.id} className={`side-item${tab === t.id ? ' active' : ''}`} onClick={() => go(t.id)}>
-                <span className="side-ico">{t.ico}</span>{t.label}
+                <span className="side-ico"><I name={t.ico} size={19} /></span>{t.label}
               </button>
             ))}
           </nav>
@@ -125,14 +126,14 @@ export default function App() {
       <div className="content">
         {!online ? <div className="offline">You are offline — this app is online-only: changes cannot be saved until you are back online. Do not close the tab with unsaved form input.</div> : null}
         <header className="topbar">
-          <button className="icon-btn menu-btn" aria-label="Open menu" onClick={() => setDrawer(true)}>☰</button>
+          <button className="icon-btn menu-btn" aria-label="Open menu" onClick={() => setDrawer(true)}><I name="menu" size={20} /></button>
           <div>
             <div className="top-title">{activeLabel}</div>
             <div className="top-date">{prettyDate(todayKarachi())} · Asia/Karachi</div>
           </div>
-          <button className="search-btn" onClick={() => go('search')}>⌕ Search</button>
+          <button className="search-btn" onClick={() => go('search')}><span style={{ display: 'inline-flex', verticalAlign: 'middle' }}><I name="search" size={15} /></span> Search</button>
           <button className="theme-btn" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
-            {theme === 'light' ? '☾' : '☀'} <span>{theme === 'light' ? 'Dark' : 'Light'}</span>
+            <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}><I name={theme === 'light' ? 'moon' : 'sun'} size={15} /></span> <span>{theme === 'light' ? 'Dark' : 'Light'}</span>
           </button>
         </header>
         <main className="main">
@@ -152,11 +153,12 @@ export default function App() {
         <nav className="bottomnav">
           {BOTTOM.map((t) => (
             <button key={t.id} className={tab === t.id ? 'active' : ''} onClick={() => go(t.id)}>
-              <span className="bnav-ico">{t.ico}</span>{t.label}
+              <span className="bnav-ico"><I name={t.ico} size={20} /></span>{t.label}
             </button>
           ))}
-          <button onClick={() => setDrawer(true)}><span className="bnav-ico">☰</span>More</button>
+          <button onClick={() => setDrawer(true)}><span className="bnav-ico"><I name="menu" size={20} /></span>More</button>
         </nav>
+        <button className="fab" aria-label="Start focus" onClick={() => go('focus')}><I name="plus" size={26} /></button>
       </div>
     </div>
   );

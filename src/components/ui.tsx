@@ -121,3 +121,72 @@ export function BarsChart({ bars, target }: { bars: { label: string; value: numb
     </div>
   );
 }
+
+/* ---- v3 UX kit: one clear action per screen, no tiny checkboxes ---- */
+
+export function PageHead({ title, tagline, action }: { title: string; tagline: string; action?: ReactNode }) {
+  return (
+    <div className="pagehead">
+      <div>
+        <h1>{title}</h1>
+        <p>{tagline}</p>
+      </div>
+      {action ? <div className="pagehead-action">{action}</div> : null}
+    </div>
+  );
+}
+
+/** Big tappable on/off card — replaces the tiny tick checkbox everywhere.
+    The whole card is the target; the switch slides and the card lights up. */
+export function Toggle({ on, onToggle, label, hint }: { on: boolean; onToggle: () => void; label: string; hint?: string }) {
+  return (
+    <button type="button" className={`toggle${on ? ' on' : ''}`} onClick={onToggle} role="switch" aria-checked={on}>
+      <span className="toggle-track"><span className="toggle-knob" /></span>
+      <span className="toggle-text">
+        <span className="toggle-label">{label}</span>
+        {hint ? <span className="toggle-hint">{hint}</span> : null}
+      </span>
+      <span className={`toggle-state${on ? ' on' : ''}`}>{on ? 'Done' : 'To do'}</span>
+    </button>
+  );
+}
+
+/** Segmented choice — replaces dropdowns for small option sets. */
+export function Seg({ label, options, value, onChange }: { label: string; options: { value: string; label: string }[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="field">
+      <label>{label}</label>
+      <div className="seg">
+        {options.map((o) => (
+          <button key={o.value} type="button" className={value === o.value ? 'active' : ''} onClick={() => onChange(o.value)}>{o.label}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Progressive disclosure: secondary stuff hides behind one tap. */
+export function Details({ title, children, defaultOpen }: { title: string; children: ReactNode; defaultOpen?: boolean }) {
+  return (
+    <details className="details" open={defaultOpen}>
+      <summary>{title}</summary>
+      <div className="details-body">{children}</div>
+    </details>
+  );
+}
+
+export function Empty({ text, actionLabel, onAction }: { text: string; actionLabel?: string; onAction?: () => void }) {
+  return (
+    <div className="empty">
+      <p>{text}</p>
+      {actionLabel && onAction ? <button className="btn ghost small" onClick={onAction}>{actionLabel}</button> : null}
+    </div>
+  );
+}
+
+/** Small on/off chip for secondary flags (Jamaat / Late / Qaza). Lime when on. */
+export function Chip({ on, onToggle, label }: { on: boolean; onToggle: () => void; label: string }) {
+  return (
+    <button type="button" className={`chip${on ? ' on' : ''}`} onClick={onToggle} role="switch" aria-checked={on}>{label}</button>
+  );
+}

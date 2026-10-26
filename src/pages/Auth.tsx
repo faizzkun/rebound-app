@@ -19,7 +19,7 @@ export default function Auth() {
         if (error) throw error;
         setOk('Password reset email sent. Check your inbox.');
       } else if (mode === 'signup') {
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } });
         if (error) throw error;
         setOk('Account created. If email confirmation is on, confirm your email, then sign in.');
       } else {

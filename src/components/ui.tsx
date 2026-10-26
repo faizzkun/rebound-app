@@ -54,10 +54,10 @@ export function ProgressBar({ value, good }: { value: number; good?: boolean }) 
   return <div className={`bar${good ? ' good' : ''}`}><div style={{ width: `${Math.round(v * 100)}%` }} /></div>;
 }
 
-export function Stat({ label, value, sub, children }: { label: string; value: string; sub: string; children?: ReactNode }) {
+export function Stat({ label, value, sub, icon, children }: { label: string; value: string; sub: string; icon?: ReactNode; children?: ReactNode }) {
   return (
     <div className="stat">
-      <div className="stat-label">{label}</div>
+      <div className="stat-top"><div className="stat-label">{label}</div>{icon}</div>
       <div className="stat-value">{value}</div>
       <div className="stat-sub">{sub}</div>
       {children}
@@ -74,7 +74,7 @@ export function TrendChart({ points }: { points: { label: string; value: number 
   const area = `${line} L${xs[xs.length - 1].toFixed(1)},${h - pad} L${xs[0].toFixed(1)},${h - pad} Z`;
   return (
     <div className="chart-wrap">
-      <svg viewBox={`0 0 ${w} ${h}`} width="100%" role="img" aria-label="Score trend">
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" role="img" aria-label="Score trend" className="trend-anim">
         <line x1={pad} x2={w - pad} y1={h - pad} y2={h - pad} stroke="var(--line)" />
         <path d={area} fill="var(--accent)" opacity="0.16" />
         <path d={line} fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
@@ -92,14 +92,15 @@ export function TrendChart({ points }: { points: { label: string; value: number 
 }
 
 /** Vertical bar chart with an optional dashed target line. */
-export function BarsChart({ bars, target }: { bars: { label: string; value: number }[]; target?: number }) {
+export function BarsChart({ bars, target, format }: { bars: { label: string; value: number }[]; target?: number; format?: (v: number) => string }) {
+  const fmt = format ?? ((v: number) => String(v));
   const w = 560, h = 170, pad = 14;
   const max = Math.max(60, target ?? 0, ...bars.map((b) => b.value));
   const bw = (w - pad * 2) / bars.length;
   const yFor = (v: number) => h - pad - 18 - (v / max) * (h - pad * 2 - 18);
   return (
     <div className="chart-wrap">
-      <svg viewBox={`0 0 ${w} ${h}`} width="100%" role="img" aria-label="Weekly bars">
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" role="img" aria-label="Weekly bars" className="bars-anim">
         {target !== undefined ? (
           <g>
             <line x1={pad} x2={w - pad} y1={yFor(target)} y2={yFor(target)} stroke="var(--danger)" strokeDasharray="5 5" strokeWidth="1.5" />
@@ -112,7 +113,7 @@ export function BarsChart({ bars, target }: { bars: { label: string; value: numb
           return (
             <g key={i}>
               <rect x={x} y={h - pad - 18 - bh} width={bw * 0.56} height={bh} rx="6" fill={b.value > 0 ? 'var(--accent)' : 'var(--line)'} />
-              <text x={x + bw * 0.28} y={h - pad - 18 - bh - 5} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text)">{b.value > 0 ? b.value : ''}</text>
+              <text x={x + bw * 0.28} y={h - pad - 18 - bh - 5} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text)">{b.value > 0 ? fmt(b.value) : ''}</text>
               <text x={x + bw * 0.28} y={h - 1} textAnchor="middle" fontSize="11" fill="var(--muted)">{b.label}</text>
             </g>
           );

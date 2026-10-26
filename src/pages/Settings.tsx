@@ -1,0 +1,151 @@
+import { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
+import { todayKarachi } from '../lib/date';
+import { computeScore } from '../lib/score';
+import { VISIBILITY_CATEGORIES } from '../lib/score';
+import { Card, Field, Err, Ok, errText } from '../components/ui';
+import type { Profile, UserPrefs, VisibilityRow, DailySummary } from '../lib/types';
+
+export default function Settings({ userId }: { userId: string }) {
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [prefs, setPrefs] = useState<UserPrefs | null>(null);
+  const [visibility, setVisibility] = useState<VisibilityRow[]>([]);
+  const [summaries, setSummaries] = useState<DailySummary[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState('');
+  const [target, setTarget] = useState(240);
+  const [junkDef, setJunkDef] = useState('');
+  const [publicName, setPublicName] = useState('');
+  const [publicBio, setPublicBio] = useState('');
+  const [publicMission, setPublicMission] = useState('');
+
+  async function load() {
+    const [p, u, v, s, pp] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+      supabase.from('user_preferences').select('*').eq('user_id', userId).maybeSingle(),
+      supabase.from('public_visibility_settings').select('*').eq('owner_id', userId),
+      supabase.from('daily_summaries').select('*').eq('owner_id', userId).order('summary_date', { ascending: false }).limit(14),
+      supabase.from('public_profile_settings').select('*').eq('owner_id', userId).maybeSingle(),
+    ]);
+    const e = p.error || u.error || v.error || s.error || pp.error;
+    if (e) { setErr(errText(e)); return; }
+    setProfile(p.data as Profile | null); setPrefs(u.data as UserPrefs | null);
+    setVisibility(v.data as VisibilityRow[]); setSummaries(s.data as DailySummary[]);
+    if (p.data) { setDisplayName((p.data as Profile).display_name ?? ''); setTarget((p.data as Profile).focus_daily_target_minutes ?? 240); }
+    if (u.data) setJunkDef((u.data as UserPrefs).junk_food_definition ?? '');
+    if (pp.data) {
+      const ppd = pp.data as { display_name: string | null; bio: string | null; mission: string | null };
+      setPublicName(ppd.display_name ?? ''); setPublicBio(ppd.bio ?? ''); setPublicMission(ppd.mission ?? '');
+    }
+  }
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveProfile(e: React.FormEvent) {
+    e.preventDefault(); setErr(null);
+    const { error } = await supabase.from('profiles').upsert({ id: userId, display_name: displayName || null, timezone: 'Asia/Karachi', currency: 'PKR', focus_daily_target_minutes: target }, { onConflict: 'id' });
+    if (error) { setErr(errText(error)); return; }
+    const { error: e2 } = await supabase.from('user_preferences').upsert({ user_id: userId, junk_food_definition: junkDef || null }, { onConflict: 'user_id' });
+    if (e2) { setErr(errText(e2)); return; }
+    setOk('Profile + preferences saved.'); load();
+  }
+  async function savePublicProfile(e: React.FormEvent) {
+    e.preventDefault(); setErr(null);
+    const { error } = await supabase.from('public_profile_settings').upsert({ owner_id: userId, display_name: publicName || null, bio: publicBio || null, mission: publicMission || null }, { onConflict: 'owner_id' });
+    if (error) { setErr(errText(error)); return; }
+    setOk('Public profile text saved. This text is only shown when the matching visibility category is ON — see below.'); load();
+  }
+  async function toggleVisibility(category: string, on: boolean) {
+    const { error } = await supabase.from('public_visibility_settings').upsert(
+      { owner_id: userId, category, is_public: on, scope: {} },
+      { onConflict: 'owner_id,category' },
+    );
+    if (error) setErr(errText(error)); else load();
+  }
+
+  async function finishDay() {
+    setErr(null); setOk(null);
+    const today = todayKarachi();
+    try {
+      const [pr, fo, sl, hd, hl, gr, wo, rd, jo] = await Promise.all([
+        supabase.from('prayer_logs').select('performed').eq('owner_id', userId).eq('prayer_date', today),
+        supabase.from('focus_sessions').select('start_at,end_at').eq('owner_id', userId).eq('session_date', today),
+        supabase.from('sleep_sessions').select('wake_time').eq('owner_id', userId).eq('bed_date', today),
+        supabase.from('habit_definitions').select('id').eq('owner_id', userId).eq('active', true),
+        supabase.from('habit_logs').select('habit_id,done').eq('owner_id', userId).eq('log_date', today),
+        supabase.from('grooming_logs').select('slot').eq('owner_id', userId).eq('log_date', today),
+        supabase.from('workout_sessions').select('status').eq('owner_id', userId).eq('session_date', today).eq('status', 'completed').limit(1),
+        supabase.from('reading_sessions').select('id').eq('owner_id', userId).eq('session_date', today).limit(1),
+        supabase.from('journal_entries').select('id').eq('owner_id', userId).eq('entry_date', today).limit(1),
+      ]);
+      const first = [pr, fo, sl, hd, hl, gr, wo, rd, jo].find((r) => r.error)?.error;
+      if (first) throw first;
+      const focusMinutes = (fo.data as { start_at: string; end_at: string | null }[]).reduce((s, x) => s + (x.end_at ? Math.max(0, Math.round((new Date(x.end_at).getTime() - new Date(x.start_at).getTime()) / 60000)) : 0), 0);
+      const habits = hd.data as { id: string }[];
+      const habitLogs = hl.data as { habit_id: string | null; done: boolean }[];
+      const result = computeScore({
+        prayersPerformed: (pr.data as { performed: boolean }[]).filter((x) => x.performed).length,
+        sleepWithWake: (sl.data as { wake_time: string | null }[]).some((x) => x.wake_time),
+        focusMinutes, focusTarget: profile?.focus_daily_target_minutes ?? 240,
+        workoutCompleted: ((wo.data as unknown[]) ?? []).length > 0,
+        habitsApplicable: habits.length > 0,
+        habitsAllDone: habits.length > 0 && habits.every((h) => habitLogs.some((l) => l.habit_id === h.id && l.done)),
+        groomingBothSlots: (gr.data as { slot: string }[]).some((x) => x.slot === 'morning') && (gr.data as { slot: string }[]).some((x) => x.slot === 'evening'),
+        readingDone: ((rd.data as unknown[]) ?? []).length > 0,
+        journalDone: ((jo.data as unknown[]) ?? []).length > 0,
+      });
+      const { error } = await supabase.from('daily_summaries').upsert({
+        owner_id: userId, summary_date: today,
+        discipline_score: result.score, score_denominator: result.denominator,
+        score_status: 'final', finalized_at: new Date().toISOString(),
+      }, { onConflict: 'owner_id,summary_date' });
+      if (error) throw error;
+      await supabase.from('daily_records').upsert({ owner_id: userId, record_date: today, status: 'finalized' }, { onConflict: 'owner_id,record_date' });
+      setOk(`Day finished. Final score: ${result.score === null ? '—' : `${Math.round(result.score * 100)}%`} (${result.completed}/${result.denominator}). This is now the final record for ${today} — tomorrow is a new rebound.`);
+      load();
+    } catch (ex) { setErr(errText(ex)); }
+  }
+
+  return (
+    <div>
+      <Err msg={err} /><Ok msg={ok} />
+      <Card title="Finish Day" sub="Writes today's provisional score into daily_summaries with score_status='final'. Unlogged categories stay uncounted as complete — finishing the day does not rewrite history, it just closes it.">
+        <button className="btn" onClick={finishDay}>Finish today ({todayKarachi()})</button>
+        <ul className="list">{summaries.map((s) => (
+          <li key={s.id}><span>{s.summary_date} · {s.score_status} · {s.discipline_score === null ? '—' : `${Math.round(Number(s.discipline_score) * 100)}%`} / {s.score_denominator ?? '—'}</span></li>
+        ))}{summaries.length === 0 ? <li className="muted">No finalized days yet.</li> : null}</ul>
+      </Card>
+      <Card title="Profile + preferences">
+        <form onSubmit={saveProfile} className="grid">
+          <Field label="Display name (private)"><input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></Field>
+          <Field label="Daily focus target (minutes)"><input type="number" min={0} value={target} onChange={(e) => setTarget(Number(e.target.value))} /></Field>
+          <Field label="My junk-food definition"><input value={junkDef} onChange={(e) => setJunkDef(e.target.value)} /></Field>
+          <div style={{ alignSelf: 'end' }}><button className="btn" type="submit">Save profile</button></div>
+        </form>
+        <p className="muted">Timezone is Asia/Karachi and currency is PKR by default (stored in profiles). Day boundary default is 04:00 in user_preferences.</p>
+      </Card>
+      <Card title="Public profile text" sub="This text is shown on the public site ONLY for categories you switch ON below. Nothing else about you is public by default.">
+        <form onSubmit={savePublicProfile} className="grid">
+          <Field label="Public display name"><input value={publicName} onChange={(e) => setPublicName(e.target.value)} /></Field>
+          <Field label="Public bio"><textarea value={publicBio} onChange={(e) => setPublicBio(e.target.value)} /></Field>
+          <Field label="Mission"><textarea value={publicMission} onChange={(e) => setPublicMission(e.target.value)} /></Field>
+          <div style={{ alignSelf: 'end' }}><button className="btn" type="submit">Save public profile</button></div>
+        </form>
+      </Card>
+      <Card title="Visibility Control Center" sub="OFF removes the category from the public site at the data layer — the public app must not receive, render, or cache that category at all. This is not a CSS hide: the public data source excludes OFF categories entirely. Finance, journal content, self-control records, private messages, credentials, and personal identifiers are NEVER public, no matter what is toggled here.">
+        {VISIBILITY_CATEGORIES.map((c) => {
+          const row = visibility.find((v) => v.category === c);
+          const on = Boolean(row?.is_public);
+          return (
+            <label className="check" key={c}>
+              <input type="checkbox" checked={on} onChange={(e) => toggleVisibility(c, e.target.checked)} />
+              <span style={{ textTransform: 'capitalize' }}>{c.replace('_', ' ')}</span>
+              <span className={on ? 'pill lime' : 'pill'}>{on ? 'PUBLIC' : 'PRIVATE'}</span>
+            </label>
+          );
+        })}
+        <p className="muted">Default for every category is PRIVATE (OFF) until you switch it on. Categories with no row yet are treated as OFF.</p>
+      </Card>
+    </div>
+  );
+}

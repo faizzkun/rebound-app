@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="Rebound logo">
+  <!-- Original geometric mark: a bold R in a black square, with a neon-lime
+       rebound arrow arc returning upward. NOT the Nexbit wordmark. -->
+  <rect x="8" y="8" width="224" height="224" rx="48" fill="#000000"/>
+  <path d="M64 182 V72 H136 A34 34 0 0 1 136 140 H64 M102 140 L158 182" fill="none" stroke="#FFFFFF" stroke-width="24" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M172 36 L179 55 L198 62 L179 69 L172 88 L165 69 L146 62 L165 55 Z" fill="#D7E317"/>
+</svg>

@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { todayKarachi, prettyDate, hhmmDuration, isoDuration, fmtMinutes, findOverlaps } from '../lib/date';
 import { computeScore, PRAYERS } from '../lib/score';
 import { Card, Err, errText, Ring, ProgressBar, Stat, TrendChart, BarsChart, Toggle } from '../components/ui';
+import { I } from '../components/icons';
 import type { PrayerLog, FocusSession, SleepRow, HabitDef, HabitLog, GroomingLog, WorkoutSession, ReadingSession, JournalEntry, Profile, DailySummary } from '../lib/types';
 
 function karachiHour(): number {
@@ -16,6 +17,11 @@ function weekdayShort(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number);
   return new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', weekday: 'short' }).format(new Date(Date.UTC(y, m - 1, d, 12)));
 }
+function dateMinus(iso: string, n: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d) - n * 86400000).toISOString().slice(0, 10);
+}
+const TONES = ['tone-lime', 'tone-teal', 'tone-violet', 'tone-pink', 'tone-amber', 'tone-sky'];
 
 export default function CommandCenter({ userId, go }: { userId: string; go: (tab: string) => void }) {
   const today = todayKarachi();
@@ -49,7 +55,7 @@ export default function CommandCenter({ userId, go }: { userId: string; go: (tab
         supabase.from('reading_sessions').select('*').eq('owner_id', userId).eq('session_date', today).limit(1),
         supabase.from('journal_entries').select('*').eq('owner_id', userId).eq('entry_date', today).limit(1),
         supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
-        supabase.from('daily_summaries').select('id,owner_id,summary_date,discipline_score,score_denominator,score_status,finalized_at').eq('owner_id', userId).eq('score_status', 'final').order('summary_date', { ascending: false }).limit(14),
+        supabase.from('daily_summaries').select('id,owner_id,summary_date,discipline_score,score_denominator,score_status,finalized_at').eq('owner_id', userId).eq('score_status', 'final').order('summary_date', { ascending: false }).limit(90),
         supabase.from('focus_sessions').select('session_date,start_at,end_at').eq('owner_id', userId).gte('session_date', weekDates[0]).lte('session_date', today),
       ]);
       const firstErr = [pr, fo, sl, hd, hl, gr, wo, rd, jo, pf, su, fw].find((r) => r.error)?.error;
@@ -114,41 +120,64 @@ export default function CommandCenter({ userId, go }: { userId: string; go: (tab
   const hour = karachiHour();
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : hour < 21 ? 'Good evening' : 'Good night';
   const sleepMins = sleep?.wake_time ? hhmmDuration(sleep.bedtime, sleep.wake_time) : null;
-  const trendPoints = summaries.filter((s) => s.discipline_score !== null).map((s) => ({ label: shortLabel(s.summary_date), value: s.discipline_score as number }));
+  const trendPoints = summaries.filter((s) => s.discipline_score !== null).slice(-14).map((s) => ({ label: shortLabel(s.summary_date), value: s.discipline_score as number }));
   const weekTotal = focusWeek.reduce((a, b) => a + b.minutes, 0);
+
+  // Streak system — a day counts when it was finished (Finish Day), never on vibes.
+  const finalized = new Set(summaries.map((s) => s.summary_date));
+  let streak = 0;
+  let cursor = finalized.has(today) ? today : dateMinus(today, 1);
+  while (finalized.has(cursor)) { streak++; cursor = dateMinus(cursor, 1); }
+  let best = 0; let run = 0; let prev = '';
+  for (const dt of [...finalized].sort()) {
+    run = prev !== '' && dt === dateMinus(prev, -1) ? run + 1 : 1;
+    best = Math.max(best, run); prev = dt;
+  }
+  const weekDots = Array.from({ length: 7 }, (_, k) => {
+    const dt = dateMinus(today, 6 - k);
+    return { dt, label: weekdayShort(dt).charAt(0), done: finalized.has(dt), isToday: dt === today };
+  });
 
   return (
     <div>
       <Err msg={err} />
       {overlaps.length > 0 ? <div className="warn">Overlapping focus sessions detected today ({overlaps.length} overlap). Overlaps are flagged, not double-counted as extra time — fix them on the Focus page.</div> : null}
 
-      <Card>
-        <div className="hero">
+      <section className="hero-dark anim">
+        <div className="hero-grid">
           <div>
-            <Ring value={score.score} label="Today's provisional discipline score" />
-          </div>
-          <div>
-            <h2 className="hero-greet">{greet} — {prettyDate(today)}</h2>
-            <p className="hero-sub">Asia/Karachi · Provisional score: {score.completed}/{score.denominator} categories done. Unlogged does not mean failed — it just means not logged yet. A missed day is followed by a rebound, not a reset of your worth.</p>
-            <ul className="list">
-              {score.breakdown.map((b) => (
-                <li key={b.label}><span>{b.label}{!b.applicable ? ' (not applicable)' : ''}</span><span className={b.done ? 'pill lime' : 'pill'}>{b.done ? 'Done' : 'Open'}</span></li>
+            <div className="hero-kicker">Today · {prettyDate(today)} · Asia/Karachi</div>
+            <h2 className="hero-title">{greet} — keep the streak alive.</h2>
+            <p className="hero-sub">Unlogged does not mean failed. A missed day is followed by a rebound, not a reset of your worth.</p>
+            <div className="hero-score-row">
+              <Ring value={score.score} size={120} label="Today's provisional discipline score" />
+              <div>
+                <div className="hero-score-num"><b>{score.completed}/{score.denominator}</b> categories done · provisional</div>
+                <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <span className="streak-pill"><I name="flame" size={16} /> {streak} day streak{streak === 1 ? '' : 's'}{best > streak ? ` · best ${best}` : ''}</span>
+                </div>
+                <div className="row" style={{ marginTop: 12 }}>
+                  <button className="btn" onClick={() => go('settings')}>Finish Day →</button>
+                </div>
+              </div>
+            </div>
+            <div className="weekdots">
+              {weekDots.map((d) => (
+                <span key={d.dt} className={`wdot${d.done ? ' done' : ''}${d.isToday ? ' today' : ''}`} title={d.dt}>{d.label}</span>
               ))}
-            </ul>
-            <div className="row" style={{ marginTop: 14 }}>
-              <button className="btn" onClick={() => go('settings')}>Finish Day →</button>
-              <span className="muted">Finishing the day locks today's score into the trend chart.</span>
+              <span className="muted" style={{ alignSelf: 'center', marginLeft: 4 }}>{streak === 0 ? 'Finish a day to start your streak.' : 'Finish today to extend it.'}</span>
             </div>
           </div>
+          <img className="hero-illus" src="/rebound-hero.png" alt="A runner climbing white steps toward a lime arc — the rebound" />
         </div>
-      </Card>
+      </section>
 
       <div className="grid" style={{ marginBottom: 16 }}>
-        <Stat label="Focus today" value={fmtMinutes(focusMinutes)} sub={`${focus.filter((f) => f.end_at).length} completed sessions${focus.some((f) => !f.end_at) ? ' · 1 running' : ''} · target ${target}m`}>
+        <div className="anim anim-d1"><Stat label="Focus today" value={fmtMinutes(focusMinutes)} sub={`${focus.filter((f) => f.end_at).length} completed sessions${focus.some((f) => !f.end_at) ? ' · 1 running' : ''} · target ${target}m`} icon={(<span className="icon-chip tone-amber"><I name="clock" size={22} /></span>)}>
           <ProgressBar value={target > 0 ? focusMinutes / target : 0} good={focusMinutes >= target} />
           <div className="row" style={{ marginTop: 12 }}><button className="btn ghost small" onClick={() => go('focus')}>Open Focus timer →</button></div>
-        </Stat>
-        <Stat label="Prayers today" value={`${prayers.filter((p) => p.performed).length}/5`} sub={workoutDone ? 'Workout done · Reading done' : `${workoutDone ? 'Workout done' : 'Workout open'} · ${readingDone ? 'Reading done' : 'Reading open'}`}>
+        </Stat></div>
+        <div className="anim anim-d1"><Stat label="Prayers today" value={`${prayers.filter((p) => p.performed).length}/5`} sub={workoutDone ? 'Workout done · Reading done' : `${workoutDone ? 'Workout done' : 'Workout open'} · ${readingDone ? 'Reading done' : 'Reading open'}`} icon={(<span className="icon-chip tone-teal"><I name="moon" size={22} /></span>)}>
           <div className="dots">
             {PRAYERS.map((p) => {
               const done = prayers.some((x) => x.prayer === p && x.performed);
@@ -156,17 +185,17 @@ export default function CommandCenter({ userId, go }: { userId: string; go: (tab
             })}
           </div>
           <div className="row" style={{ marginTop: 12 }}><button className="btn ghost small" onClick={() => go('prayer')}>Prayer + Qaza →</button></div>
-        </Stat>
-        <Stat label="Last sleep" value={sleepMins !== null ? fmtMinutes(sleepMins) : '—'} sub={sleep ? `${prettyDate(sleep.bed_date)} · bed ${sleep.bedtime}${sleep.wake_time ? ` → wake ${sleep.wake_time}` : ' · wake time not logged yet — duration is not finalized until you wake.'}` : 'No sleep session logged yet.'}>
+        </Stat></div>
+        <div className="anim anim-d2"><Stat label="Last sleep" value={sleepMins !== null ? fmtMinutes(sleepMins) : '—'} sub={sleep ? `${prettyDate(sleep.bed_date)} · bed ${sleep.bedtime}${sleep.wake_time ? ` → wake ${sleep.wake_time}` : ' · wake time not logged yet — duration is not finalized until you wake.'}` : 'No sleep session logged yet.'} icon={(<span className="icon-chip tone-sky"><I name="bed" size={22} /></span>)}>
           <div className="row" style={{ marginTop: 12 }}><button className="btn ghost small" onClick={() => go('sleep')}>Log sleep →</button></div>
-        </Stat>
-        <Stat label="Habits today" value={habits.length === 0 ? '—' : `${habitsDoneCount}/${habits.length}`} sub={habits.length === 0 ? 'No active habits yet — add one on the Habits page.' : `${habitsDone ? 'All habits done' : 'Keep going'} · Grooming ${grooming.some((g) => g.slot === 'morning') && grooming.some((g) => g.slot === 'evening') ? 'morning + evening done' : 'incomplete'}`}>
+        </Stat></div>
+        <div className="anim anim-d2"><Stat label="Habits today" value={habits.length === 0 ? '—' : `${habitsDoneCount}/${habits.length}`} sub={habits.length === 0 ? 'No active habits yet — add one on the Habits page.' : `${habitsDone ? 'All habits done' : 'Keep going'} · Grooming ${grooming.some((g) => g.slot === 'morning') && grooming.some((g) => g.slot === 'evening') ? 'morning + evening done' : 'incomplete'}`} icon={(<span className="icon-chip tone-lime"><I name="check" size={22} /></span>)}>
           {habits.length > 0 ? <ProgressBar value={habitsDoneCount / habits.length} good={habitsDone} /> : null}
           <div className="row" style={{ marginTop: 12 }}><button className="btn ghost small" onClick={() => go('habits')}>Habits + Grooming →</button></div>
-        </Stat>
+        </Stat></div>
       </div>
 
-      <div className="grid2" style={{ marginBottom: 16 }}>
+      <div className="grid2 anim anim-d3" style={{ marginBottom: 16 }}>
         <Card title="Score trend — finalized days" sub="Only days you finished with Finish Day appear here. Today stays provisional until you finish it.">
           {trendPoints.length >= 2 ? (
             <TrendChart points={trendPoints} />
@@ -189,16 +218,22 @@ export default function CommandCenter({ userId, go }: { userId: string; go: (tab
           {PRAYERS.map((p) => {
             const row = prayers.find((x) => x.prayer === p);
             return (
-              <Toggle key={p} label={p} hint={row?.is_qaza ? 'Marked as qaza' : undefined}
-                on={Boolean(row?.performed)} onToggle={() => togglePrayer(p)} />
+              <div className="action-row" key={p}>
+                <span className="icon-chip tone-teal"><I name="moon" size={21} /></span>
+                <Toggle label={p} hint={row?.is_qaza ? 'Marked as qaza' : undefined}
+                  on={Boolean(row?.performed)} onToggle={() => togglePrayer(p)} />
+              </div>
             );
           })}
           <button className="btn ghost small" onClick={() => go('prayer')}>Prayer + Qaza details →</button>
         </Card>
         <Card title="Today's habits">
-          {habits.length === 0 ? <p className="muted">No active habits yet.</p> : habits.map((h) => (
-            <Toggle key={h.id} label={h.name} hint={h.slot && h.slot !== 'any' ? h.slot : undefined}
-              on={Boolean(habitLogs.some((l) => l.habit_id === h.id && l.done))} onToggle={() => toggleHabit(h)} />
+          {habits.length === 0 ? <p className="muted">No active habits yet.</p> : habits.map((h, i) => (
+            <div className="action-row" key={h.id}>
+              <span className={`icon-chip ${TONES[i % TONES.length]}`}><I name="check" size={21} /></span>
+              <Toggle label={h.name} hint={h.slot && h.slot !== 'any' ? h.slot : undefined}
+                on={Boolean(habitLogs.some((l) => l.habit_id === h.id && l.done))} onToggle={() => toggleHabit(h)} />
+            </div>
           ))}
           <button className="btn ghost small" onClick={() => go('habits')}>Habits + Grooming →</button>
         </Card>

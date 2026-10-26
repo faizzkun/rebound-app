@@ -32,6 +32,7 @@ export default function Auth() {
   return (
     <div style={{ maxWidth: 460, margin: '40px auto' }}>
       <Card title="REBOUND" sub="Missed today? Rebound tomorrow. This is your private discipline OS — sign in to continue. No data here is public.">
+        <img className="auth-illus" src="/rebound-hero.png" alt="A runner climbing white steps toward a lime arc — the rebound" />
         <Err msg={err} /><Ok msg={ok} />
         <Seg label="What do you want to do?" value={mode} onChange={(v) => setMode(v as 'signin' | 'signup' | 'reset')} options={[
           { value: 'signin', label: 'Sign in' }, { value: 'signup', label: 'Create account' }, { value: 'reset', label: 'Forgot password' },

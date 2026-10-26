@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Card, Field, Err, Ok, errText, PageHead, Seg, Empty } from '../components/ui';
+import { todayKarachi } from '../lib/date';
+import { Card, Field, Err, Ok, errText, PageHead, Seg, Empty, BarsChart } from '../components/ui';
 import type { FinAccount, FinTxn } from '../lib/types';
 
 // Balances are DERIVED: opening_balance + signed transactions.
@@ -63,6 +64,14 @@ export default function Finance({ userId }: { userId: string }) {
 
   const balance = (a: FinAccount) => a.opening_balance + txns.filter((t) => t.account_id === a.id).reduce((s, t) => s + signed(t), 0);
   const impulse = txns.filter((t) => t.spending_class === 'impulse' || t.spending_class === 'regretted');
+  const today = todayKarachi();
+  const [ty, tm, td] = today.split('-').map(Number);
+  const weekDates = Array.from({ length: 7 }, (_, k) => new Date(Date.UTC(ty, tm - 1, td) - (6 - k) * 86400000).toISOString().slice(0, 10));
+  const weekSpend = weekDates.map((dt) => ({
+    label: new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', weekday: 'short' }).format(new Date(`${dt}T12:00:00Z`)).slice(0, 3),
+    value: txns.filter((t) => t.kind === 'expense' && t.txn_at.slice(0, 10) === dt).reduce((s, t) => s + t.amount, 0),
+  }));
+  const weekSpendTotal = weekSpend.reduce((s, b) => s + b.value, 0);
 
   return (
     <div className="page-narrow">
@@ -100,6 +109,13 @@ export default function Finance({ userId }: { userId: string }) {
           <Field label="Reason (optional)"><input value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
           <button className="btn block" type="submit">Post transaction</button>
         </form>
+      </Card>
+      <Card title="Spending — last 7 days" sub={`Total spent this week: PKR ${weekSpendTotal.toLocaleString()} (expenses only)`}>
+        {weekSpendTotal > 0 ? (
+          <BarsChart bars={weekSpend} format={(v) => (v >= 1000 ? `${Math.round(v / 100) / 10}k` : `${Math.round(v)}`)} />
+        ) : (
+          <Empty text="No spending logged in the last 7 days. Log an expense above and this chart fills itself." />
+        )}
       </Card>
       <Card title="Recent transactions">
         {txns.length === 0 ? <Empty text="No transactions yet." /> : txns.map((t) => (

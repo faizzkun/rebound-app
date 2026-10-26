@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Card, Field, Err, Ok, errText } from '../components/ui';
+import { Card, Field, Err, Ok, errText, PageHead, Seg, Empty } from '../components/ui';
 import type { FinAccount, FinTxn } from '../lib/types';
 
 // Balances are DERIVED: opening_balance + signed transactions.
@@ -65,36 +65,50 @@ export default function Finance({ userId }: { userId: string }) {
   const impulse = txns.filter((t) => t.spending_class === 'impulse' || t.spending_class === 'regretted');
 
   return (
-    <div>
+    <div className="page-narrow">
+      <PageHead title="Finance" tagline="Simple rule, written on the tin: your balance is never typed in — it is opening balance plus every transaction. If a number looks wrong, fix the transaction, not the total. And finance is never, ever public." />
       <Err msg={err} /><Ok msg={ok} />
-      <Card title="Finance (PKR)" sub="Balances are DERIVED: opening balance + signed transactions. There is no balance field to edit — if a number looks wrong, fix the transaction, not the total. Never published: finance has no public data, ever.">
-        <form onSubmit={addAccount} className="grid">
-          <Field label="Account name"><input required value={accName} onChange={(e) => setAccName(e.target.value)} /></Field>
-          <Field label="Opening balance (PKR)"><input type="number" step="0.01" value={opening} onChange={(e) => setOpening(e.target.value)} /></Field>
-          <div style={{ alignSelf: 'end' }}><button className="btn" type="submit">Create account</button></div>
+      <Card title="Your accounts">
+        {accounts.length === 0 ? <Empty text="No accounts yet. Create your first one below — a wallet, a bank account, whatever you actually use." /> : accounts.map((a) => (
+          <div className="hrow" key={a.id}>
+            <div className="hrow-main"><b>{a.name}</b></div>
+            <div className="balance">PKR {balance(a).toLocaleString()}</div>
+            <div className="hrow-meta">Started at PKR {a.opening_balance.toLocaleString()} · balance = opening + all transactions</div>
+          </div>
+        ))}
+        {impulse.length > 0 ? <div className="notebox">Impulse / regretted spending so far: <b>{impulse.length} transactions</b> — review them honestly, then plan the rebound.</div> : null}
+        <form onSubmit={addAccount} className="form-stack" style={{ marginTop: 8 }}>
+          <Field label="New account name"><input required value={accName} onChange={(e) => setAccName(e.target.value)} placeholder="e.g. Cash wallet, Bank" /></Field>
+          <Field label="Opening balance (PKR)"><input type="number" step="0.01" value={opening} onChange={(e) => setOpening(e.target.value)} placeholder="0 if you don't know it exactly" /></Field>
+          <button className="btn block" type="submit">Create account</button>
         </form>
-        <ul className="list">{accounts.map((a) => (
-          <li key={a.id}><span><b>{a.name}</b> · opening PKR {a.opening_balance} · <b>derived balance PKR {balance(a).toLocaleString()}</b></span></li>
-        ))}{accounts.length === 0 ? <li className="muted">No accounts yet.</li> : null}</ul>
-        {impulse.length > 0 ? <p className="muted">Impulse / regretted transactions so far: {impulse.length} — review them honestly, then plan the rebound.</p> : null}
       </Card>
-      <Card title="Add transaction">
-        <form onSubmit={addTxn} className="grid">
+      <Card title="Add a transaction">
+        <form onSubmit={addTxn} className="form-stack">
           <Field label="Account"><select value={accId} onChange={(e) => setAccId(e.target.value)}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
-          <Field label="Kind"><select value={kind} onChange={(e) => setKind(e.target.value)}><option value="expense">expense</option><option value="income">income</option><option value="refund">refund</option><option value="transfer">transfer</option><option value="adjustment">adjustment</option></select></Field>
-          <Field label="Category"><input value={category} onChange={(e) => setCategory(e.target.value)} /></Field>
+          <Seg label="Money in or out?" value={kind} onChange={setKind} options={[
+            { value: 'expense', label: 'Spent' }, { value: 'income', label: 'Earned' }, { value: 'refund', label: 'Refund' },
+            { value: 'transfer', label: 'Transfer' }, { value: 'adjustment', label: 'Adjustment' },
+          ]} />
           <Field label="Amount (PKR)"><input type="number" step="0.01" min={0} required value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
-          <Field label="Spending class"><select value={spendingClass} onChange={(e) => setSpendingClass(e.target.value)}><option value="necessary">necessary</option><option value="useful">useful</option><option value="discretionary">discretionary</option><option value="impulse">impulse</option><option value="regretted">regretted</option></select></Field>
-          <Field label="Description"><input value={desc} onChange={(e) => setDesc(e.target.value)} /></Field>
-          <Field label="Reason"><input value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
-          <div style={{ alignSelf: 'end' }}><button className="btn" type="submit">Post transaction</button></div>
+          <Field label="What for?"><input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Groceries, Fuel, Client payment" /></Field>
+          <Seg label="Was it worth it?" value={spendingClass} onChange={setSpendingClass} options={[
+            { value: 'necessary', label: 'Necessary' }, { value: 'useful', label: 'Useful' }, { value: 'discretionary', label: 'Discretionary' },
+            { value: 'impulse', label: 'Impulse' }, { value: 'regretted', label: 'Regretted' },
+          ]} />
+          <Field label="Note (optional)"><input value={desc} onChange={(e) => setDesc(e.target.value)} /></Field>
+          <Field label="Reason (optional)"><input value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
+          <button className="btn block" type="submit">Post transaction</button>
         </form>
       </Card>
       <Card title="Recent transactions">
-        <ul className="list">{txns.map((t) => (
-          <li key={t.id}><span>{t.txn_at.slice(0, 10)} · {t.kind} · {t.category ?? '—'} · PKR {t.amount} · {t.spending_class ?? '—'}{t.description ? ` · ${t.description}` : ''}</span>
-            <button className="btn danger small" onClick={() => delTxn(t.id)}>Delete</button></li>
-        ))}{txns.length === 0 ? <li className="muted">No transactions yet.</li> : null}</ul>
+        {txns.length === 0 ? <Empty text="No transactions yet." /> : txns.map((t) => (
+          <div className="hrow" key={t.id}>
+            <div className="hrow-main"><b>{t.kind}</b> · {t.category ?? '—'} · <b>PKR {t.amount}</b></div>
+            <div className="hrow-meta">{t.txn_at.slice(0, 10)} · {t.spending_class ?? '—'}{t.description ? ` · ${t.description}` : ''}</div>
+            <div className="hrow-actions"><button className="txt-danger" onClick={() => delTxn(t.id)}>Delete</button></div>
+          </div>
+        ))}
       </Card>
     </div>
   );

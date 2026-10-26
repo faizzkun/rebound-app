@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { todayKarachi, hhmmDuration, fmtMinutes } from '../lib/date';
-import { Card, Field, Err, Ok, errText } from '../components/ui';
+import { Card, Field, Err, Ok, errText, PageHead, Toggle, Empty } from '../components/ui';
 import type { SleepRow } from '../lib/types';
 
 export default function Sleep({ userId }: { userId: string }) {
@@ -24,7 +24,7 @@ export default function Sleep({ userId }: { userId: string }) {
     e.preventDefault(); setErr(null); setOk(null);
     const { error } = await supabase.from('sleep_sessions').insert({ owner_id: userId, bed_date: bedDate, bedtime, wake_time: wakeTime || null, is_nap: isNap, notes: notes || null });
     if (error) { setErr(errText(error)); return; }
-    setOk('Sleep session saved.'); setWakeTime(''); setNotes(''); load();
+    setOk('Sleep saved.'); setWakeTime(''); setNotes(''); load();
   }
   async function setWake(id: string, wake: string) {
     const { error } = await supabase.from('sleep_sessions').update({ wake_time: wake || null }).eq('id', id);
@@ -36,34 +36,33 @@ export default function Sleep({ userId }: { userId: string }) {
   }
 
   return (
-    <div>
+    <div className="page-narrow">
+      <PageHead title="Sleep" tagline="Two steps: log when you slept, then add your wake time when you get up. The duration only counts once you've woken up — and it handles crossing midnight for you." />
       <Err msg={err} /><Ok msg={ok} />
-      <Card title="Sleep" sub="Bedtime is HH:MM. Duration is computed ONLY when a wake time exists — and it correctly crosses midnight (e.g. 23:30 → 07:00). No wake time yet means no finalized duration.">
-        <form onSubmit={add} className="grid">
-          <Field label="Bed date"><input type="date" required value={bedDate} onChange={(e) => setBedDate(e.target.value)} /></Field>
-          <Field label="Bedtime (HH:MM)"><input type="time" required value={bedtime} onChange={(e) => setBedtime(e.target.value)} /></Field>
-          <Field label="Wake time (optional, HH:MM)"><input type="time" value={wakeTime} onChange={(e) => setWakeTime(e.target.value)} /></Field>
-          <Field label="Notes"><input value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
-          <label className="row"><input type="checkbox" checked={isNap} onChange={(e) => setIsNap(e.target.checked)} /> Nap</label>
-          <div style={{ alignSelf: 'end' }}><button className="btn" type="submit">Save sleep</button></div>
+      <Card title="Log sleep">
+        <form onSubmit={add} className="form-stack">
+          <Field label="Night of (bed date)"><input type="date" required value={bedDate} onChange={(e) => setBedDate(e.target.value)} /></Field>
+          <Field label="Bedtime"><input type="time" required value={bedtime} onChange={(e) => setBedtime(e.target.value)} /></Field>
+          <Field label="Wake time (leave empty until you wake up)"><input type="time" value={wakeTime} onChange={(e) => setWakeTime(e.target.value)} /></Field>
+          <Field label="Notes (optional)"><input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="How was the night?" /></Field>
+          <Toggle label="This was a nap" on={isNap} onToggle={() => setIsNap(!isNap)} />
+          <button className="btn block" type="submit">Save sleep</button>
         </form>
       </Card>
-      <Card title="Recent sleep">
-        <ul className="list">
-          {rows.map((r) => {
-            const dur = hhmmDuration(r.bedtime, r.wake_time);
-            return (
-              <li key={r.id}>
-                <span>{r.bed_date} · {r.is_nap ? 'nap · ' : ''}bed {r.bedtime}{r.wake_time ? ` → wake ${r.wake_time} · ${fmtMinutes(dur)}` : ' · wake not logged — duration pending'}</span>
-                <span className="row">
-                  <input type="time" style={{ width: 130 }} defaultValue={r.wake_time ?? ''} onBlur={(e) => { if (e.target.value !== (r.wake_time ?? '')) setWake(r.id, e.target.value); }} />
-                  <button className="btn danger small" onClick={() => del(r.id)}>Delete</button>
-                </span>
-              </li>
-            );
-          })}
-          {rows.length === 0 ? <li className="muted">No sleep logged yet.</li> : null}
-        </ul>
+      <Card title="Recent nights">
+        {rows.length === 0 ? <Empty text="No sleep logged yet. Log last night to start the record." /> : rows.map((r) => {
+          const dur = hhmmDuration(r.bedtime, r.wake_time);
+          return (
+            <div className="hrow" key={r.id}>
+              <div className="hrow-main"><b>{r.bed_date}</b>{r.is_nap ? ' · nap' : ''} · bed {r.bedtime}{r.wake_time ? ` → wake ${r.wake_time}` : ''}</div>
+              <div className="hrow-meta">{r.wake_time ? `Slept ${fmtMinutes(dur)}` : 'Wake time not logged yet — duration is waiting on it.'}{r.notes ? ` · ${r.notes}` : ''}</div>
+              <div className="hrow-actions">
+                <Field label="Set wake time"><input type="time" defaultValue={r.wake_time ?? ''} onBlur={(e) => { if (e.target.value !== (r.wake_time ?? '')) setWake(r.id, e.target.value); }} /></Field>
+                <button className="txt-danger" onClick={() => del(r.id)}>Delete</button>
+              </div>
+            </div>
+          );
+        })}
       </Card>
     </div>
   );

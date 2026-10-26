@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { todayKarachi } from '../lib/date';
 import { computeScore } from '../lib/score';
 import { VISIBILITY_CATEGORIES } from '../lib/score';
-import { Card, Field, Err, Ok, errText } from '../components/ui';
+import { Card, Field, Err, Ok, errText, PageHead, Toggle, Empty } from '../components/ui';
 import type { Profile, UserPrefs, VisibilityRow, DailySummary } from '../lib/types';
 
 export default function Settings({ userId }: { userId: string }) {
@@ -107,44 +107,47 @@ export default function Settings({ userId }: { userId: string }) {
   }
 
   return (
-    <div>
+    <div className="page-narrow">
+      <PageHead title="Settings & Finish Day" tagline="End the day properly, then set the few things that shape the app: your focus target, your name, and — most importantly — what the public is allowed to see." />
       <Err msg={err} /><Ok msg={ok} />
-      <Card title="Finish Day" sub="Writes today's provisional score into daily_summaries with score_status='final'. Unlogged categories stay uncounted as complete — finishing the day does not rewrite history, it just closes it.">
-        <button className="btn" onClick={finishDay}>Finish today ({todayKarachi()})</button>
-        <ul className="list">{summaries.map((s) => (
-          <li key={s.id}><span>{s.summary_date} · {s.score_status} · {s.discipline_score === null ? '—' : `${Math.round(Number(s.discipline_score) * 100)}%`} / {s.score_denominator ?? '—'}</span></li>
-        ))}{summaries.length === 0 ? <li className="muted">No finalized days yet.</li> : null}</ul>
+      <Card title="Finish today">
+        <p className="muted" style={{ marginTop: 0 }}>This locks today's score in as final. It appears on your trend chart afterwards. Unlogged things simply stay uncounted — finishing never rewrites history, it just closes the day.</p>
+        <button className="btn block" onClick={finishDay}>Finish today ({todayKarachi()})</button>
+        {summaries.length === 0 ? <Empty text="No finalized days yet. Your first Finish Day will appear here." /> : summaries.map((s) => (
+          <div className="hrow" key={s.id}>
+            <div className="hrow-main"><b>{s.summary_date}</b> · {s.score_status} · {s.discipline_score === null ? '—' : `${Math.round(Number(s.discipline_score) * 100)}%`} / {s.score_denominator ?? '—'}</div>
+          </div>
+        ))}
       </Card>
-      <Card title="Profile + preferences">
-        <form onSubmit={saveProfile} className="grid">
-          <Field label="Display name (private)"><input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></Field>
+      <Card title="Your profile">
+        <form onSubmit={saveProfile} className="form-stack">
+          <Field label="Display name (private — only you see this)"><input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></Field>
           <Field label="Daily focus target (minutes)"><input type="number" min={0} value={target} onChange={(e) => setTarget(Number(e.target.value))} /></Field>
           <Field label="My junk-food definition"><input value={junkDef} onChange={(e) => setJunkDef(e.target.value)} /></Field>
-          <div style={{ alignSelf: 'end' }}><button className="btn" type="submit">Save profile</button></div>
+          <button className="btn block" type="submit">Save profile</button>
         </form>
-        <p className="muted">Timezone is Asia/Karachi and currency is PKR by default (stored in profiles). Day boundary default is 04:00 in user_preferences.</p>
+        <p className="muted">Timezone is Asia/Karachi and currency is PKR by default. Day boundary default is 04:00.</p>
       </Card>
-      <Card title="Public profile text" sub="This text is shown on the public site ONLY for categories you switch ON below. Nothing else about you is public by default.">
-        <form onSubmit={savePublicProfile} className="grid">
+      <Card title="Public profile text">
+        <p className="muted" style={{ marginTop: 0 }}>These words are shown on the public site ONLY for categories you switch ON below. Everything else about you stays private by default.</p>
+        <form onSubmit={savePublicProfile} className="form-stack">
           <Field label="Public display name"><input value={publicName} onChange={(e) => setPublicName(e.target.value)} /></Field>
           <Field label="Public bio"><textarea value={publicBio} onChange={(e) => setPublicBio(e.target.value)} /></Field>
           <Field label="Mission"><textarea value={publicMission} onChange={(e) => setPublicMission(e.target.value)} /></Field>
-          <div style={{ alignSelf: 'end' }}><button className="btn" type="submit">Save public profile</button></div>
+          <button className="btn block" type="submit">Save public profile</button>
         </form>
       </Card>
-      <Card title="Visibility Control Center" sub="OFF removes the category from the public site at the data layer — the public app must not receive, render, or cache that category at all. This is not a CSS hide: the public data source excludes OFF categories entirely. Finance, journal content, self-control records, private messages, credentials, and personal identifiers are NEVER public, no matter what is toggled here.">
+      <Card title="What can the public see?">
+        <div className="notebox">OFF means <b>gone from the public site completely</b> — not hidden, not blurred: the public data source excludes that category entirely. And some things are <b>never public no matter what</b>: money, journal content, private tracking, messages, credentials, personal details.</div>
         {VISIBILITY_CATEGORIES.map((c) => {
           const row = visibility.find((v) => v.category === c);
           const on = Boolean(row?.is_public);
           return (
-            <label className="check" key={c}>
-              <input type="checkbox" checked={on} onChange={(e) => toggleVisibility(c, e.target.checked)} />
-              <span style={{ textTransform: 'capitalize' }}>{c.replace('_', ' ')}</span>
-              <span className={on ? 'pill lime' : 'pill'}>{on ? 'PUBLIC' : 'PRIVATE'}</span>
-            </label>
+            <Toggle key={c} label={c.replace('_', ' ')} hint={on ? 'Anyone can see this' : 'Only you can see this'}
+              on={on} onToggle={() => toggleVisibility(c, !on)} />
           );
         })}
-        <p className="muted">Default for every category is PRIVATE (OFF) until you switch it on. Categories with no row yet are treated as OFF.</p>
+        <p className="muted">Everything starts PRIVATE (OFF) until you switch it on.</p>
       </Card>
     </div>
   );

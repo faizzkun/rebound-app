@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { todayKarachi } from '../lib/date';
-import { Card, Field, Err, Ok, errText } from '../components/ui';
+import { Card, Field, Err, Ok, errText, PageHead, Toggle, Seg, Details, Empty } from '../components/ui';
 import type { HabitDef, HabitLog, GroomingLog, NutritionLog, UserPrefs } from '../lib/types';
 
 export default function Habits({ userId }: { userId: string }) {
@@ -63,61 +63,75 @@ export default function Habits({ userId }: { userId: string }) {
     e.preventDefault(); setErr(null);
     const { error } = await supabase.from('user_preferences').upsert({ user_id: userId, junk_food_definition: junkDef || null }, { onConflict: 'user_id' });
     if (error) { setErr(errText(error)); return; }
-    setOk('Junk-food definition saved. This is your definition — the app does not hardcode one.'); load();
+    setOk('Junk definition saved. This is your definition — the app does not hardcode one.'); load();
   }
   async function addNutrition(e: React.FormEvent) {
     e.preventDefault(); setErr(null);
     const { error } = await supabase.from('nutrition_logs').insert({ owner_id: userId, log_date: today, kind: nKind, description: nDesc || null, amount_spent: nAmount ? Number(nAmount) : null, reason: nReason || null });
     if (error) { setErr(errText(error)); return; }
-    setNDesc(''); setNAmount(''); setNReason(''); setOk('Nutrition entry saved.'); load();
+    setNDesc(''); setNAmount(''); setNReason(''); setOk('Food logged.'); load();
   }
 
+  const active = defs.filter((d) => d.active);
+  const doneCount = active.filter((h) => logs.find((l) => l.habit_id === h.id)?.done).length;
+
   return (
-    <div>
+    <div className="page-narrow">
+      <PageHead title="Habits & Food" tagline="Your daily checklist, minus the checklist feeling. Tap a card — it lights up. That's the whole interaction. Food logging is honest tracking, not a diet lecture." />
       <Err msg={err} /><Ok msg={ok} />
-      <Card title="Habits — today" sub="Custom habits, plus morning/evening grooming. Add a definition once, then tick it daily.">
-        <form onSubmit={addHabit} className="grid">
-          <Field label="Habit name"><input required value={name} onChange={(e) => setName(e.target.value)} /></Field>
-          <Field label="Slot"><select value={slot} onChange={(e) => setSlot(e.target.value)}><option value="any">any</option><option value="morning">morning</option><option value="evening">evening</option></select></Field>
-          <div style={{ alignSelf: 'end' }}><button className="btn" type="submit">Add habit</button></div>
+      <Card title={`Today's habits · ${doneCount}/${active.length} done`}>
+        <form onSubmit={addHabit} className="form-stack">
+          <Field label="New habit"><input required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Read 20 pages, Walk 30 min…" /></Field>
+          <Seg label="When?" value={slot} onChange={setSlot} options={[
+            { value: 'any', label: 'Any time' }, { value: 'morning', label: 'Morning' }, { value: 'evening', label: 'Evening' },
+          ]} />
+          <button className="btn block" type="submit">Add habit</button>
         </form>
-        {defs.filter((d) => d.active).map((h) => (
-          <label className="check" key={h.id}>
-            <input type="checkbox" checked={Boolean(logs.find((l) => l.habit_id === h.id)?.done)} onChange={() => toggleHabit(h)} />
-            <span>{h.name} <span className="pill">{h.slot}</span></span>
-            <button className="btn ghost small" onClick={async () => { await supabase.from('habit_definitions').update({ active: false }).eq('id', h.id); load(); }}>Deactivate</button>
-          </label>
+        {active.length === 0 ? <Empty text="No active habits yet — add your first one above." /> : active.map((h) => (
+          <div key={h.id}>
+            <Toggle label={h.name} hint={h.slot && h.slot !== 'any' ? h.slot : undefined}
+              on={Boolean(logs.find((l) => l.habit_id === h.id)?.done)} onToggle={() => toggleHabit(h)} />
+            <div style={{ textAlign: 'right', margin: '-4px 0 10px' }}>
+              <button className="txt-quiet" onClick={async () => { await supabase.from('habit_definitions').update({ active: false }).eq('id', h.id); load(); }}>Stop tracking this habit</button>
+            </div>
+          </div>
         ))}
-        {defs.filter((d) => d.active).length === 0 ? <p className="muted">No active habits yet — add your first one above.</p> : null}
       </Card>
-      <Card title="Grooming — today">
+      <Card title="Grooming — morning & evening">
         {(['morning', 'evening'] as const).map((s) => {
           const row = grooming.find((g) => g.slot === s);
           return (
-            <div key={s} className="row" style={{ borderTop: '1px solid #2a2a2a', padding: '10px 0' }}>
-              <span style={{ textTransform: 'capitalize', minWidth: 90 }}>{s}</span>
-              <label className="row"><input type="checkbox" checked={Boolean(row?.face_wash)} onChange={(e) => saveGrooming(s, { face_wash: e.target.checked })} /> Face wash</label>
-              <label className="row"><input type="checkbox" checked={Boolean(row?.teeth_brush)} onChange={(e) => saveGrooming(s, { teeth_brush: e.target.checked })} /> Teeth brush</label>
+            <div key={s} style={{ marginBottom: 6 }}>
+              <h3 style={{ textTransform: 'capitalize', margin: '10px 0 10px' }}>{s}</h3>
+              <Toggle label="Face wash" on={Boolean(row?.face_wash)} onToggle={() => saveGrooming(s, { face_wash: !row?.face_wash })} />
+              <Toggle label="Teeth brush" on={Boolean(row?.teeth_brush)} onToggle={() => saveGrooming(s, { teeth_brush: !row?.teeth_brush })} />
             </div>
           );
         })}
       </Card>
-      <Card title="Nutrition — today" sub="Junk is whatever YOU define as junk. Set the definition below, then log honestly — outside food and other entries included.">
-        <form onSubmit={saveJunkDef} className="grid">
-          <Field label="My junk-food definition (configurable)"><input value={junkDef} onChange={(e) => setJunkDef(e.target.value)} placeholder="e.g. fried fast food, sugary drinks…" /></Field>
-          <div style={{ alignSelf: 'end' }}><button className="btn ghost" type="submit">Save definition</button></div>
+      <Card title="Food today">
+        <div className="notebox">Junk is whatever <b>you</b> define as junk. {prefs?.junk_food_definition ? <>Your current definition: <b>{prefs.junk_food_definition}</b></> : 'You haven\'t set a definition yet — the one below is yours to write.'}</div>
+        <form onSubmit={addNutrition} className="form-stack">
+          <Seg label="What kind?" value={nKind} onChange={setNKind} options={[
+            { value: 'junk', label: 'Junk' }, { value: 'outside', label: 'Outside food' }, { value: 'other', label: 'Other' },
+          ]} />
+          <Field label="What was it?"><input value={nDesc} onChange={(e) => setNDesc(e.target.value)} placeholder="e.g. Burger, chai…" /></Field>
+          <Field label="Amount spent (PKR, optional)"><input type="number" step="0.01" value={nAmount} onChange={(e) => setNAmount(e.target.value)} /></Field>
+          <Field label="Reason (optional)"><input value={nReason} onChange={(e) => setNReason(e.target.value)} placeholder="Craving? Guests? Late night?" /></Field>
+          <button className="btn block" type="submit">Log food</button>
         </form>
-        <p className="muted">Current definition: {prefs?.junk_food_definition ?? 'not set yet'}</p>
-        <form onSubmit={addNutrition} className="grid">
-          <Field label="Kind"><select value={nKind} onChange={(e) => setNKind(e.target.value)}><option value="junk">junk</option><option value="outside">outside</option><option value="other">other</option></select></Field>
-          <Field label="What"><input value={nDesc} onChange={(e) => setNDesc(e.target.value)} /></Field>
-          <Field label="Amount spent (PKR)"><input type="number" step="0.01" value={nAmount} onChange={(e) => setNAmount(e.target.value)} /></Field>
-          <Field label="Reason"><input value={nReason} onChange={(e) => setNReason(e.target.value)} /></Field>
-          <div style={{ alignSelf: 'end' }}><button className="btn" type="submit">Log food</button></div>
-        </form>
-        <ul className="list">{nutrition.map((n) => (
-          <li key={n.id}><span>{n.kind} · {n.description ?? '(no detail)'}{n.amount_spent ? ` · PKR ${n.amount_spent}` : ''}{n.reason ? ` · ${n.reason}` : ''}</span></li>
-        ))}{nutrition.length === 0 ? <li className="muted">Nothing logged today.</li> : null}</ul>
+        {nutrition.length === 0 ? <Empty text="Nothing logged today." /> : nutrition.map((n) => (
+          <div className="hrow" key={n.id}>
+            <div className="hrow-main"><b style={{ textTransform: 'capitalize' }}>{n.kind}</b> · {n.description ?? '(no detail)'}</div>
+            <div className="hrow-meta">{n.amount_spent ? `PKR ${n.amount_spent} · ` : ''}{n.reason ?? ''}</div>
+          </div>
+        ))}
+        <Details title="Change my junk-food definition">
+          <form onSubmit={saveJunkDef} className="form-stack">
+            <Field label="My junk-food definition"><input value={junkDef} onChange={(e) => setJunkDef(e.target.value)} placeholder="e.g. fried fast food, sugary drinks…" /></Field>
+            <button className="btn ghost block" type="submit">Save definition</button>
+          </form>
+        </Details>
       </Card>
     </div>
   );

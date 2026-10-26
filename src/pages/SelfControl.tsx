@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { todayKarachi } from '../lib/date';
-import { Card, Field, Err, Ok, errText } from '../components/ui';
+import { Card, Field, Err, Ok, errText, PageHead, Toggle, Seg, Empty } from '../components/ui';
 import type { SelfControlLog } from '../lib/types';
 
 // Strictly private. Neutral, non-shaming language throughout.
@@ -43,27 +43,33 @@ export default function SelfControl({ userId }: { userId: string }) {
   const label = (c: string) => c === 'porn_exposure' ? 'Porn exposure' : 'Masturbation';
 
   return (
-    <div>
+    <div className="page-narrow">
+      <PageHead title="Private tracking" tagline="This page is locked to you alone. There is no public switch for it, and nothing here ever appears on the public site. Log honestly, without judgement — patterns help you plan, not punish yourself." />
       <Err msg={err} /><Ok msg={ok} />
-      <Card title="Private tracking" sub="Strictly private. No public toggle exists for this section, and nothing here appears on the public site, in public summaries, or in any shared data. Logged honestly, without judgement — patterns help you plan, not punish yourself.">
-        <form onSubmit={add} className="grid">
+      <div className="notebox">A clean day and a logged day are both just data. What matters is the next choice — <b>rebound, don't spiral.</b></div>
+      <Card title="Log today">
+        <form onSubmit={add} className="form-stack">
           <Field label="Date"><input type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-          <Field label="Category"><select value={category} onChange={(e) => setCategory(e.target.value)}><option value="porn_exposure">Porn exposure</option><option value="masturbation">Masturbation</option></select></Field>
-          <label className="row"><input type="checkbox" checked={occurred} onChange={(e) => setOccurred(e.target.checked)} /> It happened today</label>
+          <Seg label="Category" value={category} onChange={setCategory} options={[
+            { value: 'porn_exposure', label: 'Porn exposure' }, { value: 'masturbation', label: 'Masturbation' },
+          ]} />
+          <Toggle label="It happened" hint="Leave off for a clean day" on={occurred} onToggle={() => setOccurred(!occurred)} />
           {occurred ? <>
-            <Field label="Context (optional)"><input value={context} onChange={(e) => setContext(e.target.value)} /></Field>
-            <Field label="Trigger (optional)"><input value={trigger} onChange={(e) => setTrigger(e.target.value)} /></Field>
-            <Field label="Reflection (optional)"><textarea value={reflection} onChange={(e) => setReflection(e.target.value)} /></Field>
+            <Field label="Context (optional)"><input value={context} onChange={(e) => setContext(e.target.value)} placeholder="Where / when?" /></Field>
+            <Field label="Trigger (optional)"><input value={trigger} onChange={(e) => setTrigger(e.target.value)} placeholder="What led to it?" /></Field>
+            <Field label="Reflection (optional)"><textarea value={reflection} onChange={(e) => setReflection(e.target.value)} placeholder="What will you do differently next time?" /></Field>
           </> : null}
-          <div style={{ alignSelf: 'end' }}><button className="btn" type="submit">Save private log</button></div>
+          <button className="btn block" type="submit">Save private log</button>
         </form>
-        <p className="muted">A clean day and a logged day are both just data. What matters is the next choice — rebound, don't spiral.</p>
       </Card>
-      <Card title="Recent private logs">
-        <ul className="list">{rows.map((r) => (
-          <li key={r.id}><span>{r.log_date} · {label(r.category)} · {r.occurred ? 'happened' : 'did not happen'}{r.trigger ? ` · trigger: ${r.trigger}` : ''}</span>
-            <button className="btn danger small" onClick={() => del(r.id)}>Delete</button></li>
-        ))}{rows.length === 0 ? <li className="muted">No logs yet.</li> : null}</ul>
+      <Card title="Recent logs">
+        {rows.length === 0 ? <Empty text="No logs yet." /> : rows.map((r) => (
+          <div className="hrow" key={r.id}>
+            <div className="hrow-main"><b>{r.log_date}</b> · {label(r.category)} · {r.occurred ? 'happened' : 'did not happen'}</div>
+            {r.trigger ? <div className="hrow-meta">Trigger: {r.trigger}</div> : null}
+            <div className="hrow-actions"><button className="txt-danger" onClick={() => del(r.id)}>Delete</button></div>
+          </div>
+        ))}
       </Card>
     </div>
   );

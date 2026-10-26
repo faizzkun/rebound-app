@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { todayKarachi, prettyDate, hhmmDuration, isoDuration, fmtMinutes, findOverlaps } from '../lib/date';
 import { computeScore, PRAYERS } from '../lib/score';
-import { Card, Err, errText, Ring, ProgressBar, Stat, TrendChart, BarsChart } from '../components/ui';
+import { Card, Err, errText, Ring, ProgressBar, Stat, TrendChart, BarsChart, Toggle } from '../components/ui';
 import type { PrayerLog, FocusSession, SleepRow, HabitDef, HabitLog, GroomingLog, WorkoutSession, ReadingSession, JournalEntry, Profile, DailySummary } from '../lib/types';
 
 function karachiHour(): number {
@@ -83,6 +83,16 @@ export default function CommandCenter({ userId, go }: { userId: string; go: (tab
       { onConflict: 'owner_id,prayer_date,prayer' },
     );
     if (error) { setErr(errText(error)); return; }
+    load();
+  }
+
+  async function toggleHabit(h: HabitDef) {
+    const existing = habitLogs.find((l) => l.habit_id === h.id);
+    if (existing) {
+      await supabase.from('habit_logs').update({ done: !existing.done }).eq('id', existing.id);
+    } else {
+      await supabase.from('habit_logs').insert({ owner_id: userId, habit_id: h.id, log_date: today, done: true });
+    }
     load();
   }
 
@@ -179,18 +189,16 @@ export default function CommandCenter({ userId, go }: { userId: string; go: (tab
           {PRAYERS.map((p) => {
             const row = prayers.find((x) => x.prayer === p);
             return (
-              <label className="check" key={p}>
-                <input type="checkbox" checked={Boolean(row?.performed)} onChange={() => togglePrayer(p)} />
-                <span style={{ textTransform: 'capitalize' }}>{p}</span>
-                {row?.is_qaza ? <span className="pill">qaza</span> : null}
-              </label>
+              <Toggle key={p} label={p} hint={row?.is_qaza ? 'Marked as qaza' : undefined}
+                on={Boolean(row?.performed)} onToggle={() => togglePrayer(p)} />
             );
           })}
           <button className="btn ghost small" onClick={() => go('prayer')}>Prayer + Qaza details →</button>
         </Card>
         <Card title="Today's habits">
           {habits.length === 0 ? <p className="muted">No active habits yet.</p> : habits.map((h) => (
-            <p key={h.id} style={{ fontSize: 14 }}>{habitLogs.some((l) => l.habit_id === h.id && l.done) ? '✓' : '○'} {h.name}</p>
+            <Toggle key={h.id} label={h.name} hint={h.slot && h.slot !== 'any' ? h.slot : undefined}
+              on={Boolean(habitLogs.some((l) => l.habit_id === h.id && l.done))} onToggle={() => toggleHabit(h)} />
           ))}
           <button className="btn ghost small" onClick={() => go('habits')}>Habits + Grooming →</button>
         </Card>

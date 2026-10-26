@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { todayKarachi, isoDuration, fmtMinutes, findOverlaps } from '../lib/date';
-import { Card, Field, Err, Ok, errText } from '../components/ui';
+import { Card, Field, Err, Ok, errText, PageHead, ProgressBar, Details, Empty } from '../components/ui';
 import type { FocusSession, Profile } from '../lib/types';
 
 export default function Focus({ userId }: { userId: string }) {
@@ -71,41 +71,47 @@ export default function Focus({ userId }: { userId: string }) {
   const overlaps = findOverlaps(todayRows);
 
   return (
-    <div>
+    <div className="page-narrow">
+      <PageHead title="Deep Work" tagline="One job here: protect uninterrupted work time. Start the timer, do the work, stop it. Everything else on this page is secondary." />
       <Err msg={err} /><Ok msg={ok} />
       {warn ? <div className="warn">{warn}</div> : null}
-      <Card title="Deep Work" sub={`Default daily target: ${target} min (change it in Settings → Profile). Overlapping sessions are flagged, never silently double-counted.`}>
-        <div className="score" style={{ fontSize: 28 }}>Today: <span>{fmtMinutes(todayMinutes)}</span> / {target} min</div>
-        {overlaps.length > 0 ? <div className="warn">⚠ {overlaps.length} overlapping session pair(s) today. Review and delete the duplicate.</div> : null}
+      <Card title="Today's focus">
+        <div className="stat-value" style={{ margin: '2px 0' }}>{fmtMinutes(todayMinutes)} <span style={{ fontSize: 16, color: 'var(--muted)' }}>/ {target} min target</span></div>
+        <ProgressBar value={target > 0 ? todayMinutes / target : 0} good={todayMinutes >= target} />
+        {overlaps.length > 0 ? <div className="warn" style={{ marginTop: 12 }}>{overlaps.length} overlapping session pair(s) today. Review and delete the duplicate below.</div> : null}
         {runningId ? (
-          <div>
-            <p className="muted">Timer running…</p>
-            <div className="grid">
+          <div style={{ marginTop: 16 }}>
+            <p className="muted">Timer running… when you stop, note what came out of it.</p>
+            <div className="form-stack">
               <Field label="What did you produce?"><input value={output} onChange={(e) => setOutput(e.target.value)} /></Field>
               <Field label="What did you learn?"><input value={learned} onChange={(e) => setLearned(e.target.value)} /></Field>
+              <button className="btn block" onClick={stopTimer}>Stop timer</button>
             </div>
-            <button className="btn" onClick={stopTimer}>Stop timer</button>
           </div>
         ) : (
-          <div className="grid">
-            <Field label="Task / project"><input value={task} onChange={(e) => setTask(e.target.value)} placeholder="What are you working on?" /></Field>
-            <div style={{ alignSelf: 'end' }}><button className="btn" onClick={startTimer}>Start timer</button></div>
+          <div className="form-stack" style={{ marginTop: 16 }}>
+            <Field label="What are you working on?"><input value={task} onChange={(e) => setTask(e.target.value)} placeholder="e.g. Client website, course chapter…" /></Field>
+            <button className="btn block" onClick={startTimer}>Start timer</button>
           </div>
         )}
+        <p className="muted" style={{ marginTop: 12 }}>Change the daily target in Settings → Profile (default 4 hours). Overlapping sessions are flagged, never silently double-counted.</p>
       </Card>
-      <Card title="Manual entry" sub="For work done outside the timer. Pick start/end as local date-times; the app warns you if it overlaps another session.">
-        <form onSubmit={addManual} className="grid">
+      <Details title="Add work done without the timer (manual entry)">
+        <form onSubmit={addManual} className="form-stack">
           <Field label="Start"><input type="datetime-local" required value={manualStart} onChange={(e) => setManualStart(e.target.value)} /></Field>
           <Field label="End"><input type="datetime-local" value={manualEnd} onChange={(e) => setManualEnd(e.target.value)} /></Field>
           <Field label="Task / project"><input value={manualTask} onChange={(e) => setManualTask(e.target.value)} /></Field>
-          <div style={{ alignSelf: 'end' }}><button className="btn" type="submit">Save manual entry</button></div>
+          <button className="btn block" type="submit">Save manual entry</button>
         </form>
-      </Card>
-      <Card title="Recent focus sessions">
-        <ul className="list">{rows.map((r) => (
-          <li key={r.id}><span>{r.session_date} · {r.entry_kind} · {r.project_task ?? '(no task)'} · {r.end_at ? fmtMinutes(isoDuration(r.start_at, r.end_at)) : 'running…'}</span>
-            <button className="btn danger small" onClick={() => del(r.id)}>Delete</button></li>
-        ))}{rows.length === 0 ? <li className="muted">No focus sessions yet.</li> : null}</ul>
+      </Details>
+      <Card title="Recent sessions">
+        {rows.length === 0 ? <Empty text="No focus sessions yet. Start your first timer above." /> : rows.map((r) => (
+          <div className="hrow" key={r.id}>
+            <div className="hrow-main"><b>{r.session_date}</b> · {r.project_task ?? '(no task)'}</div>
+            <div className="hrow-meta">{r.entry_kind === 'timed' ? 'Timer' : 'Manual'} · {r.end_at ? fmtMinutes(isoDuration(r.start_at, r.end_at)) : 'running…'}</div>
+            <div className="hrow-actions"><button className="txt-danger" onClick={() => del(r.id)}>Delete</button></div>
+          </div>
+        ))}
       </Card>
     </div>
   );

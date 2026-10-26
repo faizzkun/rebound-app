@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Card, Field, Err, errText } from '../components/ui';
+import { Card, Field, Err, errText, PageHead, Empty } from '../components/ui';
 
 interface Hit { source: string; title: string; snippet: string }
 
@@ -31,17 +31,21 @@ export default function Search({ userId }: { userId: string }) {
   }
 
   return (
-    <div>
+    <div className="page-narrow">
+      <PageHead title="Search your own history" tagline="One box, your own words. It searches your journal, learning notes, and books — nothing leaves your account." />
       <Err msg={err} />
-      <Card title="Global search" sub="Searches your own journal entries, learning notes, and book titles/bookmarks. Nothing leaves your account — search runs against your own rows only.">
-        <form onSubmit={run} className="grid">
+      <Card title="What are you looking for?">
+        <form onSubmit={run} className="form-stack">
           <Field label="Search"><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. a book title, a lesson, a journal word…" /></Field>
-          <div style={{ alignSelf: 'end' }}><button className="btn" type="submit">Search</button></div>
+          <button className="btn block" type="submit">Search</button>
         </form>
-        <ul className="list">{hits.map((h, i) => (
-          <li key={i}><span><span className="pill">{h.source}</span> <b>{h.title}</b>{h.snippet ? ` — ${h.snippet}` : ''}</span></li>
-        ))}</ul>
-        {searched && hits.length === 0 ? <p className="muted">No matches found.</p> : null}
+        {hits.map((h, i) => (
+          <div className="hrow" key={i}>
+            <div className="hrow-main"><span className="pill">{h.source}</span> <b>{h.title}</b></div>
+            {h.snippet ? <div className="hrow-meta">{h.snippet}</div> : null}
+          </div>
+        ))}
+        {searched && hits.length === 0 ? <Empty text="No matches found. Try a shorter word — a book title or one word from the note." /> : null}
       </Card>
     </div>
   );

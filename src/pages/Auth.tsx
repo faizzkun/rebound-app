@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Card, Field, Err, Ok, errText } from '../components/ui';
+import { Card, Field, Err, Ok, errText, Seg } from '../components/ui';
 
 export default function Auth() {
   const [email, setEmail] = useState('');
@@ -33,18 +33,16 @@ export default function Auth() {
     <div style={{ maxWidth: 460, margin: '40px auto' }}>
       <Card title="REBOUND" sub="Missed today? Rebound tomorrow. This is your private discipline OS — sign in to continue. No data here is public.">
         <Err msg={err} /><Ok msg={ok} />
-        <form onSubmit={submit}>
+        <Seg label="What do you want to do?" value={mode} onChange={(v) => setMode(v as 'signin' | 'signup' | 'reset')} options={[
+          { value: 'signin', label: 'Sign in' }, { value: 'signup', label: 'Create account' }, { value: 'reset', label: 'Forgot password' },
+        ]} />
+        <form onSubmit={submit} className="form-stack">
           <Field label="Email"><input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
           <Field label="Password"><input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
-          <button className="btn" disabled={busy} type="submit">
+          <button className="btn block" disabled={busy} type="submit">
             {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send reset email'}
           </button>
         </form>
-        <div className="row" style={{ marginTop: 14 }}>
-          <button className="btn ghost small" onClick={() => setMode('signin')}>Sign in</button>
-          <button className="btn ghost small" onClick={() => setMode('signup')}>Create account</button>
-          <button className="btn ghost small" onClick={() => setMode('reset')}>Forgot password</button>
-        </div>
         <p className="muted">Only your own account can see or change your records. Row-level security enforces this in the database — there is no shared or admin view in this app.</p>
       </Card>
     </div>

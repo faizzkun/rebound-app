@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { todayKarachi } from '../lib/date';
-import { Card, Field, Err, Ok, errText } from '../components/ui';
+import { Card, Field, Err, Ok, errText, PageHead, Seg, Empty } from '../components/ui';
 import type { WorkoutSession, WorkoutExercise } from '../lib/types';
 
 export default function Workout({ userId }: { userId: string }) {
@@ -34,7 +34,7 @@ export default function Workout({ userId }: { userId: string }) {
     e.preventDefault(); setErr(null);
     const { data, error } = await supabase.from('workout_sessions').insert({ owner_id: userId, session_date: date, duration_minutes: minutes ? Number(minutes) : null, status, notes: notes || null }).select().single();
     if (error) { setErr(errText(error)); return; }
-    setExSession(data.id); setOk('Workout session saved.'); load();
+    setExSession(data.id); setOk('Workout saved.'); load();
   }
   async function addExercise(e: React.FormEvent) {
     e.preventDefault(); setErr(null);
@@ -49,33 +49,43 @@ export default function Workout({ userId }: { userId: string }) {
   }
 
   return (
-    <div>
+    <div className="page-narrow">
+      <PageHead title="Workout" tagline="One session, then the exercises inside it. Pick how it went — a partial session still counts as showing up." />
       <Err msg={err} /><Ok msg={ok} />
-      <Card title="Workout session">
-        <form onSubmit={addSession} className="grid">
+      <Card title="Log a workout">
+        <form onSubmit={addSession} className="form-stack">
           <Field label="Date"><input type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-          <Field label="Minutes"><input type="number" min={0} value={minutes} onChange={(e) => setMinutes(e.target.value)} /></Field>
-          <Field label="Status"><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="completed">completed</option><option value="partial">partial</option><option value="skipped">skipped</option><option value="unlogged">unlogged</option></select></Field>
-          <Field label="Notes"><input value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
-          <div style={{ alignSelf: 'end' }}><button className="btn" type="submit">Save session</button></div>
+          <Field label="Minutes"><input type="number" min={0} value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="How long?" /></Field>
+          <Seg label="How did it go?" value={status} onChange={setStatus} options={[
+            { value: 'completed', label: 'Completed' }, { value: 'partial', label: 'Partial' },
+            { value: 'skipped', label: 'Skipped' }, { value: 'unlogged', label: 'Unlogged' },
+          ]} />
+          <Field label="Notes (optional)"><input value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
+          <button className="btn block" type="submit">Save workout</button>
         </form>
       </Card>
-      <Card title="Add exercise to a session">
-        <form onSubmit={addExercise} className="grid">
+      <Card title="Add exercises to a session">
+        <form onSubmit={addExercise} className="form-stack">
           <Field label="Session"><select value={exSession} onChange={(e) => setExSession(e.target.value)}>{sessions.map((s) => <option key={s.id} value={s.id}>{s.session_date} · {s.status} · {s.duration_minutes ?? '—'} min</option>)}</select></Field>
-          <Field label="Exercise"><input required value={exName} onChange={(e) => setExName(e.target.value)} /></Field>
-          <Field label="Sets"><input type="number" value={sets} onChange={(e) => setSets(e.target.value)} /></Field>
-          <Field label="Reps"><input type="number" value={reps} onChange={(e) => setReps(e.target.value)} /></Field>
-          <Field label="Weight"><input type="number" step="0.5" value={weight} onChange={(e) => setWeight(e.target.value)} /></Field>
-          <div style={{ alignSelf: 'end' }}><button className="btn" type="submit">Add exercise</button></div>
+          <Field label="Exercise"><input required value={exName} onChange={(e) => setExName(e.target.value)} placeholder="e.g. Push-ups" /></Field>
+          <div className="grid">
+            <Field label="Sets"><input type="number" value={sets} onChange={(e) => setSets(e.target.value)} /></Field>
+            <Field label="Reps"><input type="number" value={reps} onChange={(e) => setReps(e.target.value)} /></Field>
+            <Field label="Weight"><input type="number" step="0.5" value={weight} onChange={(e) => setWeight(e.target.value)} /></Field>
+          </div>
+          <button className="btn block" type="submit">Add exercise</button>
         </form>
       </Card>
-      <Card title="Sessions + exercises">
-        <ul className="list">{sessions.map((s) => (
-          <li key={s.id}><span>{s.session_date} · {s.status} · {s.duration_minutes ?? '—'} min{s.notes ? ` · ${s.notes}` : ''}
-            {exercises.filter((x) => x.session_id === s.id).map((x) => <span key={x.id} className="pill" style={{ marginLeft: 6 }}>{x.exercise_name} {x.sets ?? '—'}×{x.reps ?? '—'}{x.weight ? ` @ ${x.weight}` : ''}</span>)}
-          </span><button className="btn danger small" onClick={() => del('workout_sessions', s.id)}>Delete session</button></li>
-        ))}{sessions.length === 0 ? <li className="muted">No workouts yet.</li> : null}</ul>
+      <Card title="Past workouts">
+        {sessions.length === 0 ? <Empty text="No workouts yet. Log your first one above." /> : sessions.map((s) => (
+          <div className="hrow" key={s.id}>
+            <div className="hrow-main"><b>{s.session_date}</b> · {s.status} · {s.duration_minutes ?? '—'} min{s.notes ? ` · ${s.notes}` : ''}</div>
+            {exercises.filter((x) => x.session_id === s.id).length > 0 ? (
+              <div className="hrow-meta">{exercises.filter((x) => x.session_id === s.id).map((x) => `${x.exercise_name} ${x.sets ?? '—'}×${x.reps ?? '—'}${x.weight ? ` @ ${x.weight}` : ''}`).join(' · ')}</div>
+            ) : null}
+            <div className="hrow-actions"><button className="txt-danger" onClick={() => del('workout_sessions', s.id)}>Delete session</button></div>
+          </div>
+        ))}
       </Card>
     </div>
   );
